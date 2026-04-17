@@ -1,95 +1,102 @@
 use clap::Parser;
-// Явно импортируем трейт для работы прогресс-бара с Rayon
+use dashmap::DashMap;
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
+use mimalloc::MiMalloc;
 use rayon::prelude::*;
-use sha2::{Digest, Sha256};
-use std::{collections::HashMap, fs, io, path::PathBuf, sync::Mutex};
-use walkdir::{WalkDir, DirEntry};
+use std::{
+    fs, 
+    io::{self, Read}, 
+    path::PathBuf, 
+    hash::Hasher,
+    ffi::OsStr
+};
+use twox_hash::XxHash64;
+use walkdir::WalkDir;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 #[derive(Parser)]
-#[command(name = "FileDedup", version = "1.0", about = "🔥 Быстрый поиск дубликатов")]
 struct Args {
-    #[arg(short, long, help = "Расширение (png, mp3)")]
-    ext: Option<String>,
-
-    #[arg(default_value = ".", help = "Путь")]
+    #[arg(default_value = ".")]
     path: String,
-
-    #[arg(short, long, default_value_t = 4, help = "Потоки")]
-    threads: usize,
+    #[arg(short, long)]
+    ext: Option<String>,
 }
 
 fn main() -> io::Result<()> {
     let args = Args::parse();
 
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(args.threads)
-        .build_global()
-        .unwrap();
-
-    println!("📂 Сканирование: {}", args.path);
+    println!("📂 Индексация...");
+    let size_map: DashMap<u64, Vec<PathBuf>> = DashMap::new();
     
-    let entries: Vec<DirEntry> = WalkDir::new(&args.path)
+    // Используем par_iter даже для сбора путей, если файлов ОЧЕНЬ много
+    let entries: Vec<_> = WalkDir::new(&args.path)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_file())
-        .filter(|e| {
-            if let Some(ref filter_ext) = args.ext {
-                e.path()
-                    .extension()
-                    .and_then(|s| s.to_str())
-                    .map(|s| s.eq_ignore_ascii_case(filter_ext))
-                    .unwrap_or(false)
-            } else {
-                true
-            }
-        })
         .collect();
 
-    if entries.is_empty() {
-        println!("❌ Файлы не найдены.");
-        return Ok(());
-    }
-
-    let pb = ProgressBar::new(entries.len() as u64);
-    pb.set_style(ProgressStyle::default_bar()
-        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
-        .unwrap());
-
-    let results: Mutex<HashMap<String, Vec<PathBuf>>> = Mutex::new(HashMap::new());
-
-    // Добавили аннотацию типа |entry: DirEntry|
-    entries.into_par_iter().progress_with(pb).for_each(|entry: DirEntry| {
-        let path = entry.path();
-        if let Ok(hash) = hash_file(path) {
-            let mut map = results.lock().unwrap();
-            map.entry(hash).or_insert(vec![]).push(path.to_path_buf());
+    entries.into_par_iter().for_each(|e| {
+        if let Ok(meta) = e.metadata() {
+            let path = e.path().to_path_buf();
+            if let Some(ref filter) = args.ext {
+                if path.extension().and_then(OsStr::to_str) != Some(filter) { return; }
+            }
+            size_map.entry(meta.len()).or_default().push(path);
         }
     });
 
-    print_results(results.into_inner().unwrap());
+    let candidates: Vec<PathBuf> = size_map.into_iter()
+        .filter(|(_, p)| p.len() > 1)
+        .flat_map(|(_, p)| p)
+        .collect();
+
+    if candidates.is_empty() {
+        println!("✅ Дубликатов не найдено.");
+        return Ok(());
+    }
+
+    println!("⚡ Хеширование {} файлов...", candidates.len());
+    let pb = ProgressBar::new(candidates.len() as u64);
+    pb.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len}")
+        .unwrap());
+
+    let hash_map: DashMap<u64, Vec<PathBuf>> = DashMap::new();
+
+    candidates.into_par_iter().progress_with(pb).for_each(|path| {
+        // Ошибка была здесь: буфер теперь в куче (heap), а не на стеке
+        if let Ok(h) = compute_fast_hash_heap(&path) {
+            hash_map.entry(h).or_default().push(path);
+        }
+    });
+
+    print_results(hash_map);
     Ok(())
 }
 
-fn hash_file(path: &std::path::Path) -> io::Result<String> {
+fn compute_fast_hash_heap(path: &PathBuf) -> io::Result<u64> {
     let mut file = fs::File::open(path)?;
-    let mut hasher = Sha256::new();
-    io::copy(&mut file, &mut hasher)?;
-    Ok(hex::encode(hasher.finalize()))
+    let mut hasher = XxHash64::with_seed(0);
+    
+    // БУФЕР В КУЧЕ (Heap allocation)
+    // 32 KB достаточно для эффективного чтения в Termux
+    let mut buffer = vec![0u8; 32768]; 
+
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 { break; }
+        hasher.write(&buffer[..n]);
+    }
+    Ok(hasher.finish())
 }
 
-fn print_results(map: HashMap<String, Vec<PathBuf>>) {
-    let dups: Vec<_> = map.into_iter().filter(|(_, v)| v.len() > 1).collect();
-    
-    if dups.is_empty() {
-        println!("\n✅ Дубликатов не найдено.");
-    } else {
-        println!("\n🚀 Найдено {} групп:", dups.len());
-        for (hash, paths) in dups {
-            println!("\nSHA256: {}...", &hash[..16]);
-            for p in paths {
-                println!("  [DUP] {:?}", p);
-            }
+fn print_results(map: DashMap<u64, Vec<PathBuf>>) {
+    for res in map.iter().filter(|r| r.value().len() > 1) {
+        println!("\n🎯 Hash: {:X}", res.key());
+        for path in res.value() {
+            println!("  📄 {:?}", path);
         }
     }
 }

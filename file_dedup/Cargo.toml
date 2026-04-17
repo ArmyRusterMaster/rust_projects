@@ -5,11 +5,12 @@ edition = "2024"
 
 [dependencies]
 walkdir = "2.5"
-sha2 = "0.10"
-hex = "0.4"
+twox-hash = "1.6" # Экстремально быстрый хеш
+dashmap = "5.5"   # Многопоточная Hashmap (быстрее Mutex<HashMap>)
+indicatif = { version = "0.17", features = ["rayon"] }
 clap = { version = "4.5", features = ["derive"] }
 rayon = "1.10"
-indicatif = { version = "0.17", features = ["rayon"] }
+mimalloc = "0.1"
 
 [profile.release]
 opt-level = 3
