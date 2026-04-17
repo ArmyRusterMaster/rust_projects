@@ -1,0 +1,46 @@
+[package]
+name = "rust_shadow"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Асинхронность
+tokio = { version = "1.36", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+futures = "0.3"
+
+# Интерфейс (Исправленный crossterm)
+ratatui = { version = "0.26", features = ["all-widgets"] }
+crossterm = { version = "0.27", features = ["events"] }
+
+# Аналитика
+bytes = "1.5"
+httparse = "1.8"
+tls-parser = "0.11"
+
+# Данные
+maxminddb = "0.24"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Утилиты
+chrono = "0.4"
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.11"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false
+incremental = false
+
+[profile.dev]
+opt-level = 0
+debug = false
+incremental = true
+codegen-units = 256
+panic = "abort"
