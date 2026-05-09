@@ -1,0 +1,16 @@
+{{define "admin_users.html"}}{{template "layout.html" .}}{{end}}
+{{define "content"}}
+<h1 class="text-2xl font-bold text-gray-800 mb-6">Пользователи</h1>
+{{if .users}}
+<ul class="space-y-2">
+    {{range .users}}
+    <li class="flex items-center justify-between bg-white p-3 rounded shadow-sm">
+        <span class="font-medium text-gray-800">{{.Username}} (ID: {{.ID}})</span>
+        <a href="/admin/users/{{.ID}}" class="text-indigo-600 hover:underline text-sm">Просмотреть заметки</a>
+    </li>
+    {{end}}
+</ul>
+{{else}}
+<p class="text-gray-500">Нет зарегистрированных пользователей.</p>
+{{end}}
+{{end}}

@@ -1,0 +1,4 @@
+{
+  "permissionMode": "bypass",
+  "defaultModel": "qwen/qwen3-coder:free"
+}

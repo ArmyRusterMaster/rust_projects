@@ -1,0 +1,55 @@
+{{define "layout.html"}}
+<!DOCTYPE html>
+<html lang="ru" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.title}}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-full flex flex-col">
+    <nav class="bg-white shadow-sm border-b">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <a href="/dashboard" class="font-bold text-lg text-indigo-600">NotesApp</a>
+                {{if .username}}
+                <span class="text-sm text-gray-600">Привет, <strong>{{.username}}</strong> ({{.role}})</span>
+                {{end}}
+            </div>
+            <div class="flex items-center gap-3 text-sm">
+                {{if .username}}
+                    <a href="/dashboard" class="text-gray-700 hover:text-indigo-600">Кабинет</a>
+                    <a href="/notes" class="text-gray-700 hover:text-indigo-600">Заметки</a>
+                    {{if eq .role "admin"}}
+                    <a href="/admin/users" class="text-gray-700 hover:text-indigo-600">Пользователи</a>
+                    {{end}}
+                    <a href="/logout" class="text-gray-700 hover:text-red-600">Выйти</a>
+                {{else}}
+                    <a href="/login" class="text-gray-700 hover:text-indigo-600">Войти</a>
+                    <a href="/register" class="text-gray-700 hover:text-indigo-600">Регистрация</a>
+                {{end}}
+            </div>
+        </div>
+    </nav>
+
+    {{if .error}}
+    <div class="max-w-4xl mx-auto mt-4 px-4">
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+            {{.error}}
+        </div>
+    </div>
+    {{end}}
+    {{if .success}}
+    <div class="max-w-4xl mx-auto mt-4 px-4">
+        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative" role="alert">
+            {{.success}}
+        </div>
+    </div>
+    {{end}}
+
+    <main class="flex-1 max-w-4xl mx-auto w-full px-4 py-6">
+        {{template "content" .}}
+    </main>
+</body>
+</html>
+{{end}}
