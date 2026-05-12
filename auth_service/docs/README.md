@@ -8,6 +8,7 @@
 - `security-architecture-summary.md` - сжатая сводка по архитектуре, security baseline и roadmap.
 - `protocols-summary.md` - сжатая сводка OAuth2/OIDC/JWT/Sessions/SAML/WebAuthn.
 - `static-linking.md` - статическая линковка через `musl`.
+- `production-roadmap.md` - поэтапный план доведения до production-ready платформы.
 
 ## Как читать
 

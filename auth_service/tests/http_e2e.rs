@@ -120,3 +120,23 @@ async fn e2e_rejects_invalid_login() {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
+
+#[tokio::test]
+async fn e2e_health_and_ready() {
+    let (base_url, _server) = spawn_app().await;
+    let client = reqwest::Client::new();
+
+    let health = client
+        .get(format!("{base_url}/healthz"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(health.status(), StatusCode::OK);
+
+    let ready = client
+        .get(format!("{base_url}/readyz"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(ready.status(), StatusCode::OK);
+}

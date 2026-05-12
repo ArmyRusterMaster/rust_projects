@@ -1,2 +1,0 @@
-fn(State<AppState>, axum::Json<LogoutRequest>) -> impl std::future::Future<Output = Result<impl IntoResponse, ApiError>> {logout}
-fn(State<AppState>, axum::Json<LogoutRequest>) -> impl std::future::Future<Output = Result<impl IntoResponse, ApiError>> {logout}: Handler<_, _>

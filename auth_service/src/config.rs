@@ -10,7 +10,7 @@ pub enum Backend {
 pub struct AppConfig {
     pub addr: SocketAddr,
     pub backend: Backend,
-    pub request_limit_per_sec: u64,
+    pub max_inflight_requests: usize,
 }
 
 impl AppConfig {
@@ -36,15 +36,15 @@ impl AppConfig {
             other => return Err(format!("unsupported AUTH_BACKEND: {other}")),
         };
 
-        let request_limit_per_sec = env::var("AUTH_REQUESTS_PER_SEC")
+        let max_inflight_requests = env::var("AUTH_MAX_INFLIGHT")
             .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(50);
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(256);
 
         Ok(Self {
             addr,
             backend,
-            request_limit_per_sec,
+            max_inflight_requests,
         })
     }
 }

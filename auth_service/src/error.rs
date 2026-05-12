@@ -42,3 +42,15 @@ pub enum RepositoryError {
     #[error("repository failure: {0}")]
     Internal(String),
 }
+
+#[derive(Debug, Error)]
+pub enum StartupError {
+    #[error("invalid configuration: {0}")]
+    Config(String),
+    #[error("failed to initialize backend: {0}")]
+    BackendInit(String),
+    #[error("migration failed: {0}")]
+    Migration(String),
+    #[error("server I/O error: {0}")]
+    Io(#[from] std::io::Error),
+}

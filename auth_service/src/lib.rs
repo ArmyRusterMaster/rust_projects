@@ -13,3 +13,4 @@ pub use domain::{
     TokenPair, PublicUser, UserId, UserRecord,
 };
 pub use error::{AuthError, RepositoryError};
+pub use error::StartupError;

@@ -1,2 +1,0 @@
-fn(State<AppState>, Json<LoginRequest>) -> impl std::future::Future<Output = Result<impl IntoResponse, ApiError>> {login}
-fn(State<AppState>, Json<LoginRequest>) -> impl std::future::Future<Output = Result<impl IntoResponse, ApiError>> {login}: Handler<_, _>

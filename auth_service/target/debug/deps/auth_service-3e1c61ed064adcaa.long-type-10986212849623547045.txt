@@ -1,2 +1,0 @@
-fn(State<AppState>, axum::Json<RegisterRequest>) -> impl std::future::Future<Output = Result<impl IntoResponse, ApiError>> {register}
-fn(State<AppState>, axum::Json<RegisterRequest>) -> impl std::future::Future<Output = Result<impl IntoResponse, ApiError>> {register}: Handler<_, _>

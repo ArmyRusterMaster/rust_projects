@@ -5,9 +5,10 @@ use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::post,
+    routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
+use tower::limit::GlobalConcurrencyLimitLayer;
 use tower_http::{request_id::MakeRequestUuid, request_id::SetRequestIdLayer, trace::TraceLayer};
 
 use crate::{AuthContext, AuthError, application::{LoginRequest as AppLoginRequest, LogoutRequest as AppLogoutRequest, RefreshRequest as AppRefreshRequest, RegisterRequest as AppRegisterRequest}, domain::{AuthenticatedUser, PublicUser, TokenIntrospection, TokenPair}, server::DynAuthService};
@@ -17,7 +18,7 @@ pub struct AppState {
     pub service: Arc<DynAuthService>,
 }
 
-pub fn build_router(service: Arc<DynAuthService>, _rps_limit: u64) -> Router {
+pub fn build_router(service: Arc<DynAuthService>, max_inflight: usize) -> Router {
     let state = AppState { service };
 
     Router::new()
@@ -26,10 +27,16 @@ pub fn build_router(service: Arc<DynAuthService>, _rps_limit: u64) -> Router {
         .route("/refresh", post(refresh))
         .route("/logout", post(logout))
         .route("/introspect", post(introspect))
+        .route("/healthz", get(healthz))
+        .route("/readyz", get(readyz))
+        .layer(GlobalConcurrencyLimitLayer::new(max_inflight))
         .layer(TraceLayer::new_for_http())
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
         .with_state(state)
 }
+
+async fn healthz() -> StatusCode { StatusCode::OK }
+async fn readyz() -> StatusCode { StatusCode::OK }
 
 #[derive(Debug, Deserialize)]
 struct RegisterRequest { email: String, password: String }
