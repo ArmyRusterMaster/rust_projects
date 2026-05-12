@@ -23,7 +23,7 @@ sha2 = "0.10"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"], optional = true }
 thiserror = "2"
 time = { version = "0.3", features = ["serde"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
 uuid = { version = "1", features = ["serde", "v4"] }
 zeroize = "1"
 
