@@ -1,0 +1,2 @@
+fn(State<AppState>, Json<RefreshRequest>) -> impl std::future::Future<Output = Result<impl IntoResponse, ApiError>> {refresh}
+fn(State<AppState>, Json<RefreshRequest>) -> impl std::future::Future<Output = Result<impl IntoResponse, ApiError>> {refresh}: Handler<_, _>

@@ -5,6 +5,7 @@ pub mod error;
 pub mod http;
 pub mod ports;
 pub mod server;
+pub mod config;
 
 pub use application::{AuthConfig, AuthContext, AuthService};
 pub use domain::{

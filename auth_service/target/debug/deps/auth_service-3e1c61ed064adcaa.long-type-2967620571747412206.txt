@@ -1,0 +1,2 @@
+fn(State<AppState>, axum::Json<RefreshRequest>) -> impl std::future::Future<Output = Result<impl IntoResponse, ApiError>> {refresh}
+fn(State<AppState>, axum::Json<RefreshRequest>) -> impl std::future::Future<Output = Result<impl IntoResponse, ApiError>> {refresh}: Handler<_, _>
