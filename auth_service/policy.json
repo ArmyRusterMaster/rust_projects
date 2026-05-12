@@ -1,0 +1,6 @@
+{
+  "rules": [
+    { "role": "admin", "action": "*", "owner_only": false },
+    { "role": null, "action": "profile:read", "owner_only": true }
+  ]
+}

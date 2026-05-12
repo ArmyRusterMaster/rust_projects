@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use auth_service::{
     AuthConfig, AuthService,
@@ -8,8 +8,9 @@ use auth_service::{
     },
     domain::TokenIntrospection,
     http,
+    policy::DynamicPolicyEngine,
     ports::SystemClock,
-    server::DynAuthService,
+    server::{DynAuthService, SharedPolicyEngine},
 };
 use reqwest::StatusCode;
 use serde_json::json;
@@ -23,12 +24,15 @@ async fn spawn_app() -> (String, tokio::task::JoinHandle<()>) {
         AuthConfig::default(),
     );
     let service: Arc<DynAuthService> = Arc::new(service);
-    let app = http::build_router(service, 10_000);
+    let policy: SharedPolicyEngine = Arc::new(RwLock::new(DynamicPolicyEngine::new("policy.json").unwrap()));
+    let app = http::build_router(service, policy, 10_000);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let handle = tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
+        axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>())
+            .await
+            .unwrap();
     });
 
     (format!("http://{}", addr), handle)
@@ -126,17 +130,9 @@ async fn e2e_health_and_ready() {
     let (base_url, _server) = spawn_app().await;
     let client = reqwest::Client::new();
 
-    let health = client
-        .get(format!("{base_url}/healthz"))
-        .send()
-        .await
-        .unwrap();
+    let health = client.get(format!("{base_url}/healthz")).send().await.unwrap();
     assert_eq!(health.status(), StatusCode::OK);
 
-    let ready = client
-        .get(format!("{base_url}/readyz"))
-        .send()
-        .await
-        .unwrap();
+    let ready = client.get(format!("{base_url}/readyz")).send().await.unwrap();
     assert_eq!(ready.status(), StatusCode::OK);
 }
