@@ -10,7 +10,7 @@ use crate::{
     Email,
     domain::{
         AccessToken, AccessTokenId, AuditEvent, AuditEventId, RefreshToken, RefreshTokenFamilyId,
-        RefreshTokenId, Session, SessionId, User, UserId,
+        RefreshTokenId, Session, SessionId, UserRecord, UserId,
     },
     error::RepositoryError,
     ports::{AuthRepository, NewAccessToken, NewAuditEvent, NewRefreshToken, NewSession, NewUser},
@@ -23,7 +23,7 @@ pub struct InMemoryAuthRepository {
 
 #[derive(Clone, Debug, Default)]
 struct InMemoryState {
-    users: HashMap<UserId, User>,
+    users: HashMap<UserId, UserRecord>,
     users_by_email: HashMap<String, UserId>,
     sessions: HashMap<SessionId, Session>,
     access_tokens: HashMap<AccessTokenId, AccessToken>,
@@ -57,7 +57,7 @@ impl InMemoryAuthRepository {
 
 #[async_trait]
 impl AuthRepository for InMemoryAuthRepository {
-    async fn create_user(&self, user: NewUser) -> Result<User, RepositoryError> {
+    async fn create_user(&self, user: NewUser) -> Result<UserRecord, RepositoryError> {
         let mut state = self.write_state()?;
         let email_key = user.email.as_str().to_owned();
 
@@ -65,7 +65,7 @@ impl AuthRepository for InMemoryAuthRepository {
             return Err(RepositoryError::Conflict { entity: "user" });
         }
 
-        let user = User {
+        let user = UserRecord {
             id: user.id,
             email: user.email,
             password_hash: user.password_hash,
@@ -79,7 +79,7 @@ impl AuthRepository for InMemoryAuthRepository {
         Ok(user)
     }
 
-    async fn find_user_by_email(&self, email: &Email) -> Result<Option<User>, RepositoryError> {
+    async fn find_user_by_email(&self, email: &Email) -> Result<Option<UserRecord>, RepositoryError> {
         let state = self.read_state()?;
         let Some(user_id) = state.users_by_email.get(email.as_str()) else {
             return Ok(None);
@@ -224,11 +224,11 @@ impl AuthRepository for InMemoryAuthRepository {
         Ok(state.refresh_tokens.get(token_id).cloned())
     }
 
-    async fn mark_refresh_token_rotated(
+    async fn rotate_refresh_token(
         &self,
         token_id: RefreshTokenId,
         rotated_at: OffsetDateTime,
-        replaced_by: RefreshTokenId,
+        new_token: NewRefreshToken,
     ) -> Result<(), RepositoryError> {
         let mut state = self.write_state()?;
         let Some(token) = state.refresh_tokens.get_mut(&token_id) else {
@@ -238,7 +238,32 @@ impl AuthRepository for InMemoryAuthRepository {
         };
 
         token.rotated_at.get_or_insert(rotated_at);
-        token.replaced_by.get_or_insert(replaced_by);
+        token.replaced_by.get_or_insert(new_token.id);
+
+        if state.refresh_tokens.contains_key(&new_token.id)
+            || state.refresh_tokens_by_hash.contains_key(&new_token.token_hash)
+        {
+            return Err(RepositoryError::Conflict {
+                entity: "refresh_token",
+            });
+        }
+
+        let replacement = RefreshToken {
+            id: new_token.id,
+            family_id: new_token.family_id,
+            user_id: new_token.user_id,
+            session_id: new_token.session_id,
+            token_hash: new_token.token_hash,
+            issued_at: new_token.issued_at,
+            expires_at: new_token.expires_at,
+            rotated_at: None,
+            revoked_at: None,
+            replaced_by: None,
+        };
+        state
+            .refresh_tokens_by_hash
+            .insert(replacement.token_hash.clone(), replacement.id);
+        state.refresh_tokens.insert(replacement.id, replacement);
 
         Ok(())
     }

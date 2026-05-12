@@ -1,10 +1,11 @@
 use async_trait::async_trait;
+use secrecy::SecretString;
 use time::OffsetDateTime;
 
 use crate::{
     domain::{
         AccessToken, AuditEvent, AuditEventKind, Email, RefreshToken, RefreshTokenFamilyId,
-        RefreshTokenId, Session, SessionId, User, UserId,
+        RefreshTokenId, Session, SessionId, UserId, UserRecord,
     },
     error::RepositoryError,
 };
@@ -13,7 +14,7 @@ use crate::{
 pub struct NewUser {
     pub id: UserId,
     pub email: Email,
-    pub password_hash: String,
+    pub password_hash: SecretString,
     pub created_at: OffsetDateTime,
 }
 
@@ -60,9 +61,9 @@ pub struct NewAuditEvent {
 
 #[async_trait]
 pub trait AuthRepository: Clone + Send + Sync + 'static {
-    async fn create_user(&self, user: NewUser) -> Result<User, RepositoryError>;
+    async fn create_user(&self, user: NewUser) -> Result<UserRecord, RepositoryError>;
 
-    async fn find_user_by_email(&self, email: &Email) -> Result<Option<User>, RepositoryError>;
+    async fn find_user_by_email(&self, email: &Email) -> Result<Option<UserRecord>, RepositoryError>;
 
     async fn create_session(&self, session: NewSession) -> Result<Session, RepositoryError>;
 
@@ -95,11 +96,11 @@ pub trait AuthRepository: Clone + Send + Sync + 'static {
         token_hash: &str,
     ) -> Result<Option<RefreshToken>, RepositoryError>;
 
-    async fn mark_refresh_token_rotated(
+    async fn rotate_refresh_token(
         &self,
         token_id: RefreshTokenId,
         rotated_at: OffsetDateTime,
-        replaced_by: RefreshTokenId,
+        new_token: NewRefreshToken,
     ) -> Result<(), RepositoryError>;
 
     async fn revoke_refresh_token_family(

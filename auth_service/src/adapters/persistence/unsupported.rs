@@ -4,7 +4,7 @@ use time::OffsetDateTime;
 use crate::{
     domain::{
         AccessToken, AuditEvent, Email, RefreshToken, RefreshTokenFamilyId, RefreshTokenId,
-        Session, SessionId, User,
+        Session, SessionId, UserRecord,
     },
     error::RepositoryError,
     ports::{AuthRepository, NewAccessToken, NewAuditEvent, NewRefreshToken, NewSession, NewUser},
@@ -30,11 +30,11 @@ impl UnsupportedAuthRepository {
 
 #[async_trait]
 impl AuthRepository for UnsupportedAuthRepository {
-    async fn create_user(&self, _user: NewUser) -> Result<User, RepositoryError> {
+    async fn create_user(&self, _user: NewUser) -> Result<UserRecord, RepositoryError> {
         self.unsupported("create_user")
     }
 
-    async fn find_user_by_email(&self, _email: &Email) -> Result<Option<User>, RepositoryError> {
+    async fn find_user_by_email(&self, _email: &Email) -> Result<Option<UserRecord>, RepositoryError> {
         self.unsupported("find_user_by_email")
     }
 
@@ -85,13 +85,13 @@ impl AuthRepository for UnsupportedAuthRepository {
         self.unsupported("find_refresh_token_by_hash")
     }
 
-    async fn mark_refresh_token_rotated(
+    async fn rotate_refresh_token(
         &self,
         _token_id: RefreshTokenId,
         _rotated_at: OffsetDateTime,
-        _replaced_by: RefreshTokenId,
+        _new_token: NewRefreshToken,
     ) -> Result<(), RepositoryError> {
-        self.unsupported("mark_refresh_token_rotated")
+        self.unsupported("rotate_refresh_token")
     }
 
     async fn revoke_refresh_token_family(
@@ -139,14 +139,14 @@ macro_rules! unsupported_repository_adapter {
             async fn create_user(
                 &self,
                 user: $crate::ports::NewUser,
-            ) -> Result<$crate::domain::User, $crate::error::RepositoryError> {
+            ) -> Result<$crate::domain::UserRecord, $crate::error::RepositoryError> {
                 <$crate::adapters::persistence::unsupported::UnsupportedAuthRepository as $crate::ports::AuthRepository>::create_user(&self.delegate, user).await
             }
 
             async fn find_user_by_email(
                 &self,
                 email: &$crate::domain::Email,
-            ) -> Result<Option<$crate::domain::User>, $crate::error::RepositoryError> {
+            ) -> Result<Option<$crate::domain::UserRecord>, $crate::error::RepositoryError> {
                 <$crate::adapters::persistence::unsupported::UnsupportedAuthRepository as $crate::ports::AuthRepository>::find_user_by_email(&self.delegate, email).await
             }
 
@@ -200,13 +200,13 @@ macro_rules! unsupported_repository_adapter {
                 <$crate::adapters::persistence::unsupported::UnsupportedAuthRepository as $crate::ports::AuthRepository>::find_refresh_token_by_hash(&self.delegate, token_hash).await
             }
 
-            async fn mark_refresh_token_rotated(
+            async fn rotate_refresh_token(
                 &self,
                 token_id: $crate::domain::RefreshTokenId,
                 rotated_at: time::OffsetDateTime,
-                replaced_by: $crate::domain::RefreshTokenId,
+                new_token: $crate::ports::NewRefreshToken,
             ) -> Result<(), $crate::error::RepositoryError> {
-                <$crate::adapters::persistence::unsupported::UnsupportedAuthRepository as $crate::ports::AuthRepository>::mark_refresh_token_rotated(&self.delegate, token_id, rotated_at, replaced_by).await
+                <$crate::adapters::persistence::unsupported::UnsupportedAuthRepository as $crate::ports::AuthRepository>::rotate_refresh_token(&self.delegate, token_id, rotated_at, new_token).await
             }
 
             async fn revoke_refresh_token_family(

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use secrecy::{ExposeSecret, SecretString};
 use sqlx::{Row, SqlitePool, sqlite::SqlitePoolOptions};
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -6,7 +7,7 @@ use uuid::Uuid;
 use crate::{
     domain::{
         AccessToken, AccessTokenId, AuditEvent, AuditEventKind, Email, RefreshToken,
-        RefreshTokenFamilyId, RefreshTokenId, Session, SessionId, User, UserId,
+        RefreshTokenFamilyId, RefreshTokenId, Session, SessionId, UserRecord, UserId,
     },
     error::RepositoryError,
     ports::{AuthRepository, NewAccessToken, NewAuditEvent, NewRefreshToken, NewSession, NewUser},
@@ -113,19 +114,19 @@ impl SqliteAuthRepository {
 
 #[async_trait]
 impl AuthRepository for SqliteAuthRepository {
-    async fn create_user(&self, user: NewUser) -> Result<User, RepositoryError> {
+    async fn create_user(&self, user: NewUser) -> Result<UserRecord, RepositoryError> {
         let result = sqlx::query(
             "INSERT INTO users (id, email, password_hash, created_at, disabled_at) VALUES (?, ?, ?, ?, NULL)",
         )
         .bind(user.id.to_string())
         .bind(user.email.as_str())
-        .bind(&user.password_hash)
+        .bind(user.password_hash.expose_secret())
         .bind(user.created_at.unix_timestamp())
         .execute(&self.pool)
         .await;
 
         match result {
-            Ok(_) => Ok(User {
+            Ok(_) => Ok(UserRecord {
                 id: user.id,
                 email: user.email,
                 password_hash: user.password_hash,
@@ -139,7 +140,7 @@ impl AuthRepository for SqliteAuthRepository {
         }
     }
 
-    async fn find_user_by_email(&self, email: &Email) -> Result<Option<User>, RepositoryError> {
+    async fn find_user_by_email(&self, email: &Email) -> Result<Option<UserRecord>, RepositoryError> {
         let row = sqlx::query(
             "SELECT id, email, password_hash, created_at, disabled_at FROM users WHERE email = ?",
         )
@@ -328,21 +329,22 @@ impl AuthRepository for SqliteAuthRepository {
         row.map(map_refresh_token_row).transpose()
     }
 
-    async fn mark_refresh_token_rotated(
+    async fn rotate_refresh_token(
         &self,
         token_id: RefreshTokenId,
         rotated_at: OffsetDateTime,
-        replaced_by: RefreshTokenId,
+        new_token: NewRefreshToken,
     ) -> Result<(), RepositoryError> {
+        let mut tx = self.pool.begin().await.map_err(map_sqlx_error)?;
         let result = sqlx::query(
             "UPDATE refresh_tokens
              SET rotated_at = COALESCE(rotated_at, ?), replaced_by = COALESCE(replaced_by, ?)
              WHERE id = ?",
         )
         .bind(rotated_at.unix_timestamp())
-        .bind(replaced_by.to_string())
+        .bind(new_token.id.to_string())
         .bind(token_id.to_string())
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(map_sqlx_error)?;
 
@@ -352,6 +354,23 @@ impl AuthRepository for SqliteAuthRepository {
             });
         }
 
+        sqlx::query(
+            "INSERT INTO refresh_tokens
+             (id, family_id, user_id, session_id, token_hash, issued_at, expires_at, rotated_at, revoked_at, replaced_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)",
+        )
+        .bind(new_token.id.to_string())
+        .bind(new_token.family_id.to_string())
+        .bind(new_token.user_id.to_string())
+        .bind(new_token.session_id.to_string())
+        .bind(new_token.token_hash)
+        .bind(new_token.issued_at.unix_timestamp())
+        .bind(new_token.expires_at.unix_timestamp())
+        .execute(&mut *tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        tx.commit().await.map_err(map_sqlx_error)?;
         Ok(())
     }
 
@@ -400,12 +419,12 @@ impl AuthRepository for SqliteAuthRepository {
     }
 }
 
-fn map_user_row(row: sqlx::sqlite::SqliteRow) -> Result<User, RepositoryError> {
-    Ok(User {
+fn map_user_row(row: sqlx::sqlite::SqliteRow) -> Result<UserRecord, RepositoryError> {
+    Ok(UserRecord {
         id: parse_uuid_wrapper(row.get("id"), "user_id", UserId::from_uuid)?,
         email: Email::parse(row.get::<String, _>("email"))
             .map_err(|error| RepositoryError::Internal(error.to_string()))?,
-        password_hash: row.get("password_hash"),
+        password_hash: SecretString::new(row.get::<String, _>("password_hash").into()),
         created_at: from_unix(row.get("created_at"))?,
         disabled_at: row
             .get::<Option<i64>, _>("disabled_at")

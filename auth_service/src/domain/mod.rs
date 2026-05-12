@@ -1,5 +1,6 @@
 use std::{fmt, str::FromStr};
 
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -225,18 +226,37 @@ impl FromStr for Email {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct User {
+#[derive(Clone, Debug)]
+pub struct UserRecord {
     pub id: UserId,
     pub email: Email,
-    pub password_hash: String,
+    pub password_hash: SecretString,
     pub created_at: OffsetDateTime,
     pub disabled_at: Option<OffsetDateTime>,
 }
 
-impl User {
+impl UserRecord {
     pub fn is_disabled(&self) -> bool {
         self.disabled_at.is_some()
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PublicUser {
+    pub id: UserId,
+    pub email: Email,
+    pub created_at: OffsetDateTime,
+    pub disabled_at: Option<OffsetDateTime>,
+}
+
+impl From<&UserRecord> for PublicUser {
+    fn from(value: &UserRecord) -> Self {
+        Self {
+            id: value.id,
+            email: value.email.clone(),
+            created_at: value.created_at,
+            disabled_at: value.disabled_at,
+        }
     }
 }
 
@@ -325,7 +345,7 @@ pub struct TokenPair {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthenticatedUser {
-    pub user: User,
+    pub user: PublicUser,
     pub tokens: TokenPair,
 }
 

@@ -6,6 +6,7 @@ use auth_service::{
     application::{LoginRequest, LogoutRequest, RefreshRequest, RegisterRequest},
     ports::{Clock, CredentialHasher},
 };
+use secrecy::{ExposeSecret, SecretString};
 use time::OffsetDateTime;
 
 const PASSWORD: &str = "correct horse battery staple";
@@ -14,12 +15,12 @@ const PASSWORD: &str = "correct horse battery staple";
 struct TestCredentialHasher;
 
 impl CredentialHasher for TestCredentialHasher {
-    fn hash_password(&self, password: &str) -> Result<String, AuthError> {
-        Ok(format!("test-hash:{password}"))
+    fn hash_password(&self, password: &str) -> Result<SecretString, AuthError> {
+        Ok(SecretString::new(format!("test-hash:{password}").into()))
     }
 
-    fn verify_password(&self, password: &str, password_hash: &str) -> Result<bool, AuthError> {
-        Ok(password_hash == format!("test-hash:{password}"))
+    fn verify_password(&self, password: &str, password_hash: &SecretString) -> Result<bool, AuthError> {
+        Ok(password_hash.expose_secret() == format!("test-hash:{password}"))
     }
 }
 

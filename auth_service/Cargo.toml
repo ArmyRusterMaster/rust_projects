@@ -13,19 +13,21 @@ surrealdb = []
 [dependencies]
 argon2 = { version = "0.5", features = ["std"] }
 async-trait = "0.1"
+axum = "0.8"
 hex = "0.4"
 rand_core = { version = "0.6", features = ["getrandom"] }
+secrecy = { version = "0.10", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"], optional = true }
 thiserror = "2"
 time = { version = "0.3", features = ["serde"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
 uuid = { version = "1", features = ["serde", "v4"] }
 zeroize = "1"
 
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [profile.dev]
 opt-level = 0

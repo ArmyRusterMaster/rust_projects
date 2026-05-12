@@ -2,8 +2,8 @@ use time::Duration;
 
 use crate::{
     domain::{
-        AccessTokenId, AuditEventId, AuditEventKind, AuthenticatedUser, Email,
-        RefreshTokenFamilyId, RefreshTokenId, SessionId, TokenIntrospection, TokenPair, User,
+        AccessTokenId, AuditEventId, AuditEventKind, AuthenticatedUser, Email, PublicUser,
+        RefreshTokenFamilyId, RefreshTokenId, SessionId, TokenIntrospection, TokenPair,
         UserId,
     },
     error::{AuthError, RepositoryError},
@@ -88,7 +88,7 @@ where
         }
     }
 
-    pub async fn register(&self, request: RegisterRequest) -> Result<User, AuthError> {
+    pub async fn register(&self, request: RegisterRequest) -> Result<PublicUser, AuthError> {
         self.validate_password(&request.password)?;
 
         let email = Email::parse(request.email)?;
@@ -114,7 +114,7 @@ where
         self.record_audit(Some(user.id), AuditEventKind::UserRegistered, now, None)
             .await?;
 
-        Ok(user)
+        Ok(PublicUser::from(&user))
     }
 
     pub async fn login(
@@ -167,7 +167,10 @@ where
         self.record_audit(Some(user.id), AuditEventKind::LoginSucceeded, now, None)
             .await?;
 
-        Ok(AuthenticatedUser { user, tokens })
+        Ok(AuthenticatedUser {
+            user: PublicUser::from(&user),
+            tokens,
+        })
     }
 
     pub async fn refresh(&self, request: RefreshRequest) -> Result<TokenPair, AuthError> {
@@ -215,7 +218,7 @@ where
             return Err(AuthError::TokenRevoked);
         }
 
-        let (tokens, new_refresh_token_id) = self
+        let (tokens, new_refresh_token) = self
             .issue_token_pair(
                 refresh_token.user_id,
                 Some(refresh_token.family_id),
@@ -225,7 +228,7 @@ where
             .await?;
 
         self.repository
-            .mark_refresh_token_rotated(refresh_token.id, now, new_refresh_token_id)
+            .rotate_refresh_token(refresh_token.id, now, new_refresh_token)
             .await?;
 
         self.record_audit(
@@ -311,7 +314,7 @@ where
         existing_family_id: Option<RefreshTokenFamilyId>,
         session_issue: SessionIssue,
         now: time::OffsetDateTime,
-    ) -> Result<(TokenPair, RefreshTokenId), AuthError> {
+    ) -> Result<(TokenPair, NewRefreshToken), AuthError> {
         let refresh_family_id = existing_family_id.unwrap_or_default();
         let access_token_id = AccessTokenId::new();
         let refresh_token_id = RefreshTokenId::new();
@@ -339,8 +342,7 @@ where
             SessionIssue::Existing(session_id) => session_id,
         };
 
-        self.repository
-            .create_access_token(NewAccessToken {
+        let access_token_write = NewAccessToken {
                 id: access_token_id,
                 user_id,
                 session_id,
@@ -348,20 +350,23 @@ where
                 issued_at: now,
                 expires_at: access_expires_at,
                 scopes: self.config.default_scopes.clone(),
-            })
-            .await?;
+            };
+        self.repository.create_access_token(access_token_write).await?;
+        let refresh_token_write = NewRefreshToken {
+            id: refresh_token_id,
+            family_id: refresh_family_id,
+            user_id,
+            session_id,
+            token_hash: self.tokens.hash_token(&refresh_token),
+            issued_at: now,
+            expires_at: refresh_expires_at,
+        };
 
-        self.repository
-            .create_refresh_token(NewRefreshToken {
-                id: refresh_token_id,
-                family_id: refresh_family_id,
-                user_id,
-                session_id,
-                token_hash: self.tokens.hash_token(&refresh_token),
-                issued_at: now,
-                expires_at: refresh_expires_at,
-            })
-            .await?;
+        if existing_family_id.is_none() {
+            self.repository
+                .create_refresh_token(refresh_token_write.clone())
+                .await?;
+        }
 
         Ok((
             TokenPair {
@@ -371,7 +376,7 @@ where
                 access_expires_at,
                 refresh_expires_at,
             },
-            refresh_token_id,
+            refresh_token_write,
         ))
     }
 
