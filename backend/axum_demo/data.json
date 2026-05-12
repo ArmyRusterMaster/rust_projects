@@ -1,0 +1,21 @@
+{
+  "users": {
+    "cfa6273d-9167-4e65-9143-1381b6c0afe2": {
+      "id": "cfa6273d-9167-4e65-9143-1381b6c0afe2",
+      "username": "Denis1",
+      "password_hash": "$2b$12$6bpqfjMFx3eqbNq9pj.bdOhb6lJ9XkQngbyPo8wNWvUcMJG9i4xjS",
+      "role": "Regular"
+    }
+  },
+  "posts": {
+    "70308cc3-dc31-420a-bc92-f011e073c78d": {
+      "id": "70308cc3-dc31-420a-bc92-f011e073c78d",
+      "title": "Q",
+      "content": "Q",
+      "author_id": "cfa6273d-9167-4e65-9143-1381b6c0afe2"
+    }
+  },
+  "sessions": {
+    "fa6307cb-68bd-4b7e-be65-d193ecc68f73": "cfa6273d-9167-4e65-9143-1381b6c0afe2"
+  }
+}
